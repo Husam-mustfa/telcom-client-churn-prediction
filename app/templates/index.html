@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Churn Predictor — Telco customer retention model</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #E9EDF2;
+      --surface: #FFFFFF;
+      --surface-2: #F4F6F9;
+      --line: #D5DCE5;
+      --ink: #101828;
+      --ink-2: #475467;
+      --ink-3: #8A94A6;
+      --accent: #2E5BFF;
+      --accent-soft: #E3EAFF;
+      --stay: #0A8F5B;
+      --stay-soft: #DCF5EA;
+      --churn: #D7263D;
+      --churn-soft: #FDE4E8;
+      --radius: 10px;
+      --radius-sm: 6px;
+      --font: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+
+    body {
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--ink);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ---------- Layout ---------- */
+    .app {
+      display: grid;
+      grid-template-columns: 340px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 36px 32px;
+      background: var(--ink);
+      color: #E6EAF2;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+      overflow-y: auto;
+    }
+
+    .main {
+      padding: 36px 48px 80px;
+      max-width: 980px;
+    }
+
+    /* ---------- Sidebar ---------- */
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-mark {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      background: var(--accent);
+      display: grid; place-items: center;
+      flex-shrink: 0;
+    }
+    .brand-mark svg { width: 20px; height: 20px; }
+    .brand h1 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+    }
+    .brand p {
+      margin: 0;
+      font-size: 12.5px;
+      color: #A4AFC2;
+    }
+
+    .sidebar h2 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+    .sidebar p, .sidebar li {
+      margin: 0;
+      font-size: 13.5px;
+      color: #B5BECF;
+      line-height: 1.6;
+    }
+    .sidebar ol {
+      margin: 0;
+      padding-left: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .sidebar ol li::marker { color: var(--accent); font-weight: 700; }
+
+    .facts {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .fact {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+    }
+    .fact strong {
+      display: block;
+      font-size: 20px;
+      font-weight: 800;
+      color: #FFFFFF;
+      letter-spacing: -0.02em;
+    }
+    .fact span { font-size: 12px; color: #A4AFC2; }
+
+    .sidebar footer {
+      margin-top: auto;
+      font-size: 12px;
+      color: #6F7A90;
+    }
+
+    /* ---------- Page header ---------- */
+    .page-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+    .page-head h2 {
+      margin: 0 0 4px;
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .page-head p { margin: 0; color: var(--ink-2); max-width: 56ch; }
+
+    .samples { display: flex; gap: 8px; flex-shrink: 0; }
+
+    /* ---------- Form sections ---------- */
+    fieldset {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 0;
+      margin: 0 0 20px;
+    }
+    legend { display: none; }
+
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 24px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .section-head h3 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .section-head p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--ink-3);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px 20px;
+      padding: 22px 24px 24px;
+    }
+    .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+
+    .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .field label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .field .hint {
+      font-size: 12px;
+      color: var(--ink-3);
+      line-height: 1.4;
+    }
+    .field .error {
+      display: none;
+      font-size: 12px;
+      color: var(--churn);
+    }
+    .field.invalid .error { display: block; }
+    .field.invalid select,
+    .field.invalid input { border-color: var(--churn); }
+
+    select, input[type="number"] {
+      font: inherit;
+      font-size: 14px;
+      color: var(--ink);
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      width: 100%;
+      transition: border-color .15s, box-shadow .15s, background .15s;
+    }
+    select {
+      appearance: none;
+      -webkit-appearance: none;
+      padding-right: 36px;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' fill='none' stroke='%23475467' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      cursor: pointer;
+    }
+    select:focus-visible, input:focus-visible {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+      background: var(--surface);
+    }
+    select:disabled, input:disabled {
+      color: var(--ink-3);
+      background: #EEF1F5;
+      cursor: not-allowed;
+    }
+
+    .with-unit { position: relative; }
+    .with-unit input { padding-left: 28px; }
+    .with-unit::before {
+      content: "$";
+      position: absolute;
+      left: 12px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--ink-3);
+      font-size: 14px;
+      pointer-events: none;
+    }
+    .with-unit.months input { padding-left: 12px; padding-right: 62px; }
+    .with-unit.months::before { content: "months"; left: auto; right: 12px; font-size: 12px; }
+
+    /* ---------- Buttons ---------- */
+    .btn {
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      border-radius: var(--radius-sm);
+      padding: 10px 16px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: background .15s, border-color .15s, transform .05s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 1px; }
+    .btn-primary { background: var(--accent); color: #FFFFFF; }
+    .btn-primary:hover { background: #1F49E6; }
+    .btn-primary:disabled { background: #9DB0FF; cursor: wait; }
+    .btn-ghost {
+      background: var(--surface);
+      color: var(--ink-2);
+      border-color: var(--line);
+    }
+    .btn-ghost:hover { border-color: var(--ink-3); color: var(--ink); }
+    .btn-link {
+      background: transparent;
+      color: var(--accent);
+      padding: 6px 4px;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    .actions .spacer { flex: 1; }
+    .actions .status { font-size: 13px; color: var(--ink-3); }
+
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: none;
+    }
+    .btn-primary.loading .spinner { display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---------- Result ---------- */
+    .result {
+      display: none;
+      margin-top: 28px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .result.show { display: block; }
+    .result-head {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 22px 24px;
+      border-left: 6px solid var(--line);
+    }
+    .result.churn .result-head { border-left-color: var(--churn); background: var(--churn-soft); }
+    .result.stay .result-head { border-left-color: var(--stay); background: var(--stay-soft); }
+    .result.error .result-head { border-left-color: var(--churn); background: var(--churn-soft); }
+
+    .result-icon {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      display: grid; place-items: center;
+      flex-shrink: 0;
+      color: #fff;
+    }
+    .result.churn .result-icon { background: var(--churn); }
+    .result.stay .result-icon { background: var(--stay); }
+    .result.error .result-icon { background: var(--churn); }
+    .result-icon svg { width: 22px; height: 22px; }
+
+    .result-head h3 {
+      margin: 0 0 2px;
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+    }
+    .result-head p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+
+    .result-body {
+      padding: 18px 24px 22px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    .result-body h4 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink-2);
+    }
+    .prob-bar {
+      height: 10px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      overflow: hidden;
+      margin: 8px 0 6px;
+    }
+    .prob-fill {
+      height: 100%;
+      width: 0;
+      border-radius: 999px;
+      background: var(--accent);
+      transition: width .6s cubic-bezier(.2,.8,.2,1);
+    }
+    .result.churn .prob-fill { background: var(--churn); }
+    .result.stay .prob-fill { background: var(--stay); }
+    .prob-value {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .prob-note { font-size: 12px; color: var(--ink-3); }
+
+    .signals { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+    .signals li {
+      font-size: 13.5px;
+      color: var(--ink-2);
+      padding-left: 18px;
+      position: relative;
+    }
+    .signals li::before {
+      content: "";
+      position: absolute;
+      left: 0; top: 8px;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--ink-3);
+    }
+    .signals li.risk::before { background: var(--churn); }
+    .signals li.good::before { background: var(--stay); }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 1100px) {
+      .grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 900px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { position: static; height: auto; padding: 28px 24px; }
+      .main { padding: 28px 20px 60px; }
+      .page-head { flex-direction: column; align-items: flex-start; }
+      .result-body { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      .grid, .grid.cols-2 { grid-template-columns: 1fr; }
+      .facts { grid-template-columns: 1fr 1fr; }
+      .samples { flex-wrap: wrap; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===================== Sidebar ===================== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 17l5-6 4 4 5-8 4 5"/>
+        </svg>
+      </div>
+      <div>
+        <h1>Churn Predictor</h1>
+        <p>Telco customer retention model</p>
+      </div>
+    </div>
+
+    <section>
+      <h2>What this does</h2>
+      <p>Enter a customer's account profile and the model estimates whether they are likely to cancel their service in the near term. Built on the public Telco Customer Churn dataset (7,043 customers, 19 features).</p>
+    </section>
+
+    <section>
+      <h2>How a prediction is made</h2>
+      <ol>
+        <li>The form is sent as JSON to the <code style="color:#fff">/predict</code> endpoint.</li>
+        <li>The server encodes categorical fields and scales numeric ones with the same pipeline used in training.</li>
+        <li>The trained classifier returns a churn label and, if available, a probability.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Signals the model weighs most</h2>
+      <div class="facts">
+        <div class="fact"><strong>Contract</strong><span>Month-to-month is the strongest churn signal</span></div>
+        <div class="fact"><strong>Tenure</strong><span>Risk drops sharply after the first year</span></div>
+        <div class="fact"><strong>Internet</strong><span>Fiber optic customers churn more often</span></div>
+        <div class="fact"><strong>Payment</strong><span>Electronic check correlates with churn</span></div>
+      </div>
+    </section>
+
+    <footer>Machine learning course project · Predictions are estimates, not decisions.</footer>
+  </aside>
+
+  <!-- ===================== Main ===================== -->
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h2>Customer profile</h2>
+        <p>Fill in the customer's details below. Fields update each other automatically where a service dependency exists.</p>
+      </div>
+      <div class="samples">
+        <button type="button" class="btn btn-ghost" id="sampleHigh">Load high-risk example</button>
+        <button type="button" class="btn btn-ghost" id="sampleLow">Load low-risk example</button>
+      </div>
+    </div>
+
+    <form id="predictionForm" novalidate>
+
+      <!-- Demographics -->
+      <fieldset>
+        <legend>Demographics</legend>
+        <div class="section-head">
+          <h3>Demographics</h3>
+          <p>Who the customer is</p>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label for="gender">Gender</label>
+            <select id="gender" name="gender">
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="SeniorCitizen">Senior citizen</label>
+            <select id="SeniorCitizen" name="SeniorCitizen">
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+            </select>
+            <span class="hint">Aged 65 or older</span>
+          </div>
+          <div class="field">
+            <label for="Partner">Has a partner</label>
+            <select id="Partner" name="Partner">
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="Dependents">Has dependents</label>
+            <select id="Dependents" name="Dependents">
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+            </select>
+            <span class="hint">Children, parents, or others on the account</span>
+          </div>
+          <div class="field">
+            <label for="tenure">Tenure</label>
+            <div class="with-unit months">
+              <input type="number" id="tenure" name="tenure" min="0" max="120" step="1" placeholder="0" required>
+            </div>
+            <span class="hint">How long they've been a customer</span>
+            <span class="error">Enter a whole number of months (0–120).</span>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Phone -->
+      <fieldset>
+        <legend>Phone service</legend>
+        <div class="section-head">
+          <h3>Phone service</h3>
+          <p>Voice line and extras</p>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label for="PhoneService">Phone service</label>
+            <select id="PhoneService" name="PhoneService">
+              <option value="Yes">Yes</option>
+              <option value="No">No</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="MultipleLines">Multiple lines</label>
+            <select id="MultipleLines" name="MultipleLines">
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+              <option value="No phone service">No phone service</option>
+            </select>
+            <span class="hint">Set automatically when there is no phone service</span>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Internet -->
+      <fieldset>
+        <legend>Internet service</legend>
+        <div class="section-head">
+          <h3>Internet service</h3>
+          <p>Connection type and add-ons</p>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label for="InternetService">Internet service</label>
+            <select id="InternetService" name="InternetService">
+              <option value="DSL">DSL</option>
+              <option value="Fiber optic">Fiber optic</option>
+              <option value="No">No internet</option>
+            </select>
+            <span class="hint">Choosing "No internet" locks the add-ons below</span>
+          </div>
+          <div class="field">
+            <label for="OnlineSecurity">Online security</label>
+            <select id="OnlineSecurity" name="OnlineSecurity" data-internet-addon>
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+              <option value="No internet service">No internet service</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="OnlineBackup">Online backup</label>
+            <select id="OnlineBackup" name="OnlineBackup" data-internet-addon>
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+              <option value="No internet service">No internet service</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="DeviceProtection">Device protection</label>
+            <select id="DeviceProtection" name="DeviceProtection" data-internet-addon>
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+              <option value="No internet service">No internet service</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="TechSupport">Tech support</label>
+            <select id="TechSupport" name="TechSupport" data-internet-addon>
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+              <option value="No internet service">No internet service</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="StreamingTV">Streaming TV</label>
+            <select id="StreamingTV" name="StreamingTV" data-internet-addon>
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+              <option value="No internet service">No internet service</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="StreamingMovies">Streaming movies</label>
+            <select id="StreamingMovies" name="StreamingMovies" data-internet-addon>
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+              <option value="No internet service">No internet service</option>
+            </select>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Billing -->
+      <fieldset>
+        <legend>Contract and billing</legend>
+        <div class="section-head">
+          <h3>Contract and billing</h3>
+          <p>How the customer pays</p>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label for="Contract">Contract</label>
+            <select id="Contract" name="Contract">
+              <option value="Month-to-month">Month-to-month</option>
+              <option value="One year">One year</option>
+              <option value="Two year">Two year</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="PaperlessBilling">Paperless billing</label>
+            <select id="PaperlessBilling" name="PaperlessBilling">
+              <option value="Yes">Yes</option>
+              <option value="No">No</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="PaymentMethod">Payment method</label>
+            <select id="PaymentMethod" name="PaymentMethod">
+              <option value="Electronic check">Electronic check</option>
+              <option value="Mailed check">Mailed check</option>
+              <option value="Bank transfer (automatic)">Bank transfer (automatic)</option>
+              <option value="Credit card (automatic)">Credit card (automatic)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="MonthlyCharges">Monthly charges</label>
+            <div class="with-unit">
+              <input type="number" id="MonthlyCharges" name="MonthlyCharges" min="0" step="0.01" placeholder="0.00" required>
+            </div>
+            <span class="hint">Current monthly bill</span>
+            <span class="error">Enter the monthly amount.</span>
+          </div>
+          <div class="field">
+            <label for="TotalCharges">Total charges</label>
+            <div class="with-unit">
+              <input type="number" id="TotalCharges" name="TotalCharges" min="0" step="0.01" placeholder="0.00" required>
+            </div>
+            <span class="hint" id="totalHint">Lifetime amount billed to date</span>
+            <span class="error">Enter the total amount billed.</span>
+          </div>
+          <div class="field" style="justify-content:flex-end">
+            <button type="button" class="btn btn-link" id="estimateTotal" style="align-self:flex-start">Estimate total from tenure × monthly</button>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="actions">
+        <button type="submit" class="btn btn-primary" id="submitBtn">
+          <span class="spinner" aria-hidden="true"></span>
+          <span class="btn-text">Predict churn</span>
+        </button>
+        <button type="reset" class="btn btn-ghost" id="resetBtn">Clear form</button>
+        <span class="spacer"></span>
+        <span class="status" id="status"></span>
+      </div>
+    </form>
+
+    <!-- Result -->
+    <section class="result" id="result" aria-live="polite">
+      <div class="result-head">
+        <div class="result-icon" id="resultIcon"></div>
+        <div>
+          <h3 id="resultTitle"></h3>
+          <p id="resultSub"></p>
+        </div>
+      </div>
+      <div class="result-body" id="resultBody">
+        <div id="probBlock">
+          <h4>Churn probability</h4>
+          <div class="prob-value" id="probValue">—</div>
+          <div class="prob-bar"><div class="prob-fill" id="probFill"></div></div>
+          <div class="prob-note" id="probNote"></div>
+        </div>
+        <div>
+          <h4>Risk factors in this profile</h4>
+          <ul class="signals" id="signals"></ul>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const form = $('predictionForm');
+  const submitBtn = $('submitBtn');
+  const statusEl = $('status');
+
+  // Field order matches the Telco dataset columns the model was trained on.
+  const FIELDS = [
+    'gender','SeniorCitizen','Partner','Dependents','tenure','PhoneService',
+    'MultipleLines','InternetService','OnlineSecurity','OnlineBackup',
+    'DeviceProtection','TechSupport','StreamingTV','StreamingMovies',
+    'Contract','PaperlessBilling','PaymentMethod','MonthlyCharges','TotalCharges'
+  ];
+  const NUMERIC = { tenure: 'int', MonthlyCharges: 'float', TotalCharges: 'float' };
+
+  /* ---------- Dependent fields ---------- */
+  const phone = $('PhoneService');
+  const lines = $('MultipleLines');
+  const internet = $('InternetService');
+  const addons = Array.from(document.querySelectorAll('[data-internet-addon]'));
+
+  function syncPhone() {
+    if (phone.value === 'No') {
+      lines.value = 'No phone service';
+      lines.disabled = true;
+    } else {
+      if (lines.value === 'No phone service') lines.value = 'No';
+      lines.disabled = false;
+    }
+  }
+
+  function syncInternet() {
+    const none = internet.value === 'No';
+    addons.forEach((s) => {
+      if (none) { s.value = 'No internet service'; s.disabled = true; }
+      else { if (s.value === 'No internet service') s.value = 'No'; s.disabled = false; }
+    });
+  }
+
+  phone.addEventListener('change', syncPhone);
+  internet.addEventListener('change', syncInternet);
+
+  /* ---------- Total charges helper ---------- */
+  $('estimateTotal').addEventListener('click', () => {
+    const t = parseInt($('tenure').value, 10);
+    const m = parseFloat($('MonthlyCharges').value);
+    if (Number.isNaN(t) || Number.isNaN(m)) {
+      setStatus('Enter tenure and monthly charges first.');
+      return;
+    }
+    $('TotalCharges').value = (t * m).toFixed(2);
+    $('totalHint').textContent = `Estimated as ${t} × $${m.toFixed(2)}`;
+    setStatus('');
+  });
+
+  /* ---------- Validation ---------- */
+  function validate() {
+    let ok = true;
+    for (const id of Object.keys(NUMERIC)) {
+      const input = $(id);
+      const field = input.closest('.field');
+      const raw = input.value.trim();
+      const val = NUMERIC[id] === 'int' ? parseInt(raw, 10) : parseFloat(raw);
+      const bad = raw === '' || Number.isNaN(val) || val < 0 || (id === 'tenure' && val > 120);
+      field.classList.toggle('invalid', bad);
+      if (bad) ok = false;
+    }
+    return ok;
+  }
+  Object.keys(NUMERIC).forEach((id) => {
+    $(id).addEventListener('input', () => $(id).closest('.field').classList.remove('invalid'));
+  });
+
+  /* ---------- Build payload ---------- */
+  function collect() {
+    const data = {};
+    for (const id of FIELDS) {
+      const el = $(id);
+      if (NUMERIC[id] === 'int') data[id] = parseInt(el.value, 10);
+      else if (NUMERIC[id] === 'float') data[id] = parseFloat(el.value);
+      else data[id] = el.value; // disabled selects still have a value
+    }
+    return data;
+  }
+
+  /* ---------- Local risk explanation (not the model) ---------- */
+  function explain(d) {
+    const out = [];
+    if (d.Contract === 'Month-to-month') out.push(['risk', 'Month-to-month contract: no commitment keeps the customer in place']);
+    else out.push(['good', `${d.Contract} contract reduces short-term churn risk`]);
+    if (d.tenure < 12) out.push(['risk', `Only ${d.tenure} month${d.tenure === 1 ? '' : 's'} of tenure — early customers churn most`]);
+    else if (d.tenure >= 36) out.push(['good', `${d.tenure} months of tenure signals loyalty`]);
+    if (d.InternetService === 'Fiber optic') out.push(['risk', 'Fiber optic plans have higher historical churn']);
+    if (d.PaymentMethod === 'Electronic check') out.push(['risk', 'Electronic check payers churn more than automatic payers']);
+    else if (d.PaymentMethod.includes('automatic')) out.push(['good', 'Automatic payment is associated with retention']);
+    if (d.InternetService !== 'No' && d.OnlineSecurity === 'No' && d.TechSupport === 'No') out.push(['risk', 'No security or tech support add-ons']);
+    if (d.MonthlyCharges > 80) out.push(['risk', `High monthly bill ($${d.MonthlyCharges.toFixed(2)})`]);
+    if (d.Partner === 'Yes' || d.Dependents === 'Yes') out.push(['good', 'Household ties (partner or dependents) correlate with staying']);
+    return out;
+  }
+
+  /* ---------- Submit ---------- */
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!validate()) { setStatus('Fix the highlighted fields.'); return; }
+
+    const data = collect();
+    setLoading(true);
+    setStatus('Sending profile to the model…');
+
+    try {
+      const response = await fetch('/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!response.ok) throw new Error(`Server responded with ${response.status}`);
+      const result = await response.json();
+      renderResult(result, data);
+      setStatus('');
+    } catch (err) {
+      renderError(err.message);
+      setStatus('');
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  form.addEventListener('reset', () => {
+    setTimeout(() => { syncPhone(); syncInternet(); }, 0);
+    $('result').classList.remove('show');
+    $('totalHint').textContent = 'Lifetime amount billed to date';
+    document.querySelectorAll('.field.invalid').forEach((f) => f.classList.remove('invalid'));
+    setStatus('');
+  });
+
+  /* ---------- Render ---------- */
+  const ICON_CHURN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 8v5M12 16.5v.5"/><path d="M10.3 3.9L2.6 17.2A2 2 0 004.3 20h15.4a2 2 0 001.7-2.8L13.7 3.9a2 2 0 00-3.4 0z"/></svg>';
+  const ICON_STAY  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  const ICON_ERR   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>';
+
+  function isChurn(pred) {
+    if (typeof pred === 'number') return pred === 1;
+    const s = String(pred).trim().toLowerCase();
+    return s === '1' || s === 'yes' || s === 'churn' || s === 'true';
+  }
+
+  function renderResult(result, data) {
+    const churn = isChurn(result.prediction);
+    const box = $('result');
+    box.className = 'result show ' + (churn ? 'churn' : 'stay');
+    $('resultIcon').innerHTML = churn ? ICON_CHURN : ICON_STAY;
+    $('resultTitle').textContent = churn ? 'Likely to churn' : 'Likely to stay';
+    $('resultSub').textContent = churn
+      ? 'The model predicts this customer will cancel. Consider a retention offer.'
+      : 'The model predicts this customer will keep their service.';
+
+    // Probability (optional in the API response)
+    const p = typeof result.probability === 'number' ? result.probability
+            : typeof result.churn_probability === 'number' ? result.churn_probability : null;
+    if (p !== null) {
+      const pct = Math.round(p * 100);
+      $('probValue').textContent = pct + '%';
+      $('probNote').textContent = 'Model confidence that the customer churns';
+      requestAnimationFrame(() => { $('probFill').style.width = pct + '%'; });
+    } else {
+      $('probValue').textContent = churn ? 'High' : 'Low';
+      $('probFill').style.width = churn ? '75%' : '25%';
+      $('probNote').textContent = 'Return a "probability" field from /predict to show the exact value.';
+    }
+
+    const list = $('signals');
+    list.innerHTML = '';
+    explain(data).forEach(([kind, text]) => {
+      const li = document.createElement('li');
+      li.className = kind;
+      li.textContent = text;
+      list.appendChild(li);
+    });
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function renderError(message) {
+    const box = $('result');
+    box.className = 'result show error';
+    $('resultIcon').innerHTML = ICON_ERR;
+    $('resultTitle').textContent = 'Prediction failed';
+    $('resultSub').textContent = message + '. Check that the server is running and /predict accepts JSON.';
+    $('probValue').textContent = '—';
+    $('probFill').style.width = '0';
+    $('probNote').textContent = '';
+    $('signals').innerHTML = '';
+  }
+
+  function setLoading(on) {
+    submitBtn.disabled = on;
+    submitBtn.classList.toggle('loading', on);
+    submitBtn.querySelector('.btn-text').textContent = on ? 'Predicting…' : 'Predict churn';
+  }
+  function setStatus(msg) { statusEl.textContent = msg; }
+
+  /* ---------- Sample profiles ---------- */
+  const SAMPLES = {
+    high: {
+      gender:'Female', SeniorCitizen:'No', Partner:'No', Dependents:'No', tenure:2,
+      PhoneService:'Yes', MultipleLines:'No', InternetService:'Fiber optic',
+      OnlineSecurity:'No', OnlineBackup:'No', DeviceProtection:'No', TechSupport:'No',
+      StreamingTV:'Yes', StreamingMovies:'Yes', Contract:'Month-to-month',
+      PaperlessBilling:'Yes', PaymentMethod:'Electronic check', MonthlyCharges:94.40, TotalCharges:188.80
+    },
+    low: {
+      gender:'Male', SeniorCitizen:'No', Partner:'Yes', Dependents:'Yes', tenure:60,
+      PhoneService:'Yes', MultipleLines:'Yes', InternetService:'DSL',
+      OnlineSecurity:'Yes', OnlineBackup:'Yes', DeviceProtection:'Yes', TechSupport:'Yes',
+      StreamingTV:'No', StreamingMovies:'No', Contract:'Two year',
+      PaperlessBilling:'No', PaymentMethod:'Bank transfer (automatic)', MonthlyCharges:64.85, TotalCharges:3891.00
+    }
+  };
+  function loadSample(s) {
+    for (const id of FIELDS) $(id).value = s[id];
+    syncPhone(); syncInternet();
+    $('result').classList.remove('show');
+    setStatus('Sample profile loaded.');
+  }
+  $('sampleHigh').addEventListener('click', () => loadSample(SAMPLES.high));
+  $('sampleLow').addEventListener('click', () => loadSample(SAMPLES.low));
+
+  // Initial state
+  syncPhone();
+  syncInternet();
+})();
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import joblib
 from pathlib import Path
 import pandas as pd
@@ -46,7 +46,9 @@ def predict():
     else:
         return jsonify({'prediction' : 'No'})
     
-
+@app.get('/')
+def index():
+    return render_template('index.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
